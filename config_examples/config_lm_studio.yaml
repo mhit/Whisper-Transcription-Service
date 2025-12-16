@@ -1,0 +1,41 @@
+# LM Studio用設定例
+# LM Studioをローカルで起動した状態で使用
+
+# 作業ディレクトリの設定
+work_dir: ./output
+
+# AI分析設定（LM Studio）
+analyzer:
+  # LM StudioのAPIエンドポイント
+  api_base_url: http://localhost:1234/v1
+
+  # APIタイプ
+  api_type: custom
+
+  # モデル設定（LM Studioでロードしたモデル名を指定）
+  model: local-model  # 例: llama-2-7b-chat, mistral-7b-instruct など
+  temperature: 0.7
+  max_tokens: 4000
+
+  # 分析タイプ（有効/無効を選択）
+  analysis_types:
+    summary: true
+    key_points: true
+    topics: true
+    sentiment: true
+    keywords: true
+
+  chunk_size: 10000
+  chunk_overlap: 500
+  enable_basic_analysis: true
+
+# その他の設定はデフォルトのconfig.yamlと同じ
+transcriber:
+  model: large-v3
+  language: ja
+  device: auto
+
+reporter:
+  format: markdown
+  include_screenshots: true
+  screenshot_count: 10

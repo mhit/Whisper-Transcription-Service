@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+
+# Test and temporary files
+test_output*/
+output_*/
+cache/
+*.log
+.pytest_cache/
+.coverage
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Project specific
+.cleanup_backup/
+*.wav
+*.mp4
+*.mp3
+*.m4a
+downloads/
+
+# Temporary test scripts
+test_*.py
+!test_resume_functionality.py
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Environment
+.env
+.env.local
+
+# Documentation build
+docs/_build/
+*.doctree

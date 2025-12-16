@@ -1,0 +1,119 @@
+# Gemini Ultimate Generator Configuration
+# Gemini究極レポート生成システム設定ファイル
+
+# API Configuration
+api:
+  # Gemini API Key - 以下の方法で設定可能:
+  # 1. このファイルに直接記入
+  # 2. 環境変数 GEMINI_API_KEY
+  # 3. .gemini_key ファイル
+  key: "AIzaSyA0i8fXk6f7N5BlLzVI0mXcv1LcyueBD-I"  # ここにAPIキーを入力（例: "AIzaSy..."）
+
+  # API Endpoint (通常変更不要)
+  endpoint: "generativelanguage.googleapis.com"
+
+# Model Configuration
+model:
+  # 使用モデル
+  # gemini-1.5-pro: 最高品質（100点レポート再現用・推奨）
+  # gemini-2.0-flash-exp: 最新・高速
+  # gemini-1.5-flash: バランス型
+  name: "gemini-2.5-pro"
+
+  # Generation Parameters
+  temperature: 0.7      # 創造性 (0.0-1.0)
+  top_p: 0.95          # 多様性
+  top_k: 40            # 候補数
+  max_output_tokens: 32000  # 最大出力トークン
+
+# Safety Settings
+safety:
+  # コンテンツフィルタ設定
+  # BLOCK_NONE: フィルタなし（セミナー内容を完全処理）
+  # BLOCK_ONLY_HIGH: 高リスクのみブロック
+  # BLOCK_MEDIUM_AND_ABOVE: 中リスク以上をブロック
+  harassment: "BLOCK_NONE"
+  hate_speech: "BLOCK_NONE"
+  sexually_explicit: "BLOCK_NONE"
+  dangerous_content: "BLOCK_NONE"
+
+# Processing Configuration
+processing:
+  # セグメント処理設定
+  include_timestamps: true     # タイムスタンプを含める
+  mark_important: true        # 重要セグメントにマーク
+
+  # 重要キーワード（これらを含むセグメントに★マーク）
+  important_keywords:
+    - "重要"
+    - "成功"
+    - "失敗"
+    - "売上"
+    - "利益"
+    - "戦略"
+    - "ポイント"
+    - "結論"
+    - "理由"
+    - "方法"
+    - "秘訣"
+    - "注意"
+
+# Output Configuration
+output:
+  # レポート出力設定
+  format: "markdown"          # 出力形式
+  include_toc: false         # 目次を含める
+  include_summary: true      # サマリーを含める
+  min_lines: 300            # 最小行数（品質基準）
+
+  # 品質チェック項目
+  quality_checks:
+    - "executive_summary"    # エグゼクティブサマリー
+    - "numerical_data"       # 具体的な数値
+    - "action_plan"          # アクションプラン
+    - "framework"            # フレームワーク
+    - "success_cases"        # 成功事例
+    - "visual_elements"      # 視覚的要素
+
+# Paths
+paths:
+  # ファイルパス設定
+  transcript_dir: "output/project_20250922_144453"
+  transcript_file: "transcript.json"
+  output_report: "gemini_ultimate_report.md"
+
+# Advanced Settings
+advanced:
+  # 詳細設定（通常変更不要）
+  retry_count: 3             # API失敗時のリトライ回数
+  timeout: 300               # タイムアウト（秒）
+  cache_enabled: false       # キャッシュ機能
+  verbose_logging: false     # 詳細ログ出力
+
+  # トークン推定設定
+  japanese_char_token_ratio: 1.0    # 日本語1文字 = 1トークン
+  english_char_token_ratio: 0.25    # 英語4文字 = 1トークン
+
+  # コンテキスト制限（トークン）
+  context_limits:
+    "gemini-1.5-pro": 2000000      # 2Mトークン
+    "gemini-2.0-flash-exp": 1000000 # 1Mトークン（推定）
+    "gemini-1.5-flash": 1000000     # 1Mトークン
+
+# Quality Benchmarks
+benchmarks:
+  # 品質ベンチマーク（100点レポート基準）
+  target_score: 100
+  min_acceptable_score: 85
+
+  # スコアリング重み
+  weights:
+    intelligence: 0.4        # 知性・洞察
+    synthesis: 0.3          # 統合・要約
+    actionability: 0.2      # 実用性
+    clarity: 0.1            # 明確性
+
+# Notes
+# このファイルはGemini Ultimate Generatorの動作を制御します
+# 100点品質のレポート生成のため、gemini-1.5-proの使用を推奨
+# APIキーの取得: https://makersuite.google.com/app/apikey
