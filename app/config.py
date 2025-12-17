@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     # Server
     port: int = 8000
     host: str = "0.0.0.0"
+    debug: bool = False
 
     # Authentication
     admin_password: str = "changeme"
@@ -24,7 +25,7 @@ class Settings(BaseSettings):
     cloudflare_tunnel_token: Optional[str] = None
 
     # Data Management
-    data_dir: Path = Path("/data")
+    data_dir: Path = Path("/app/data")
     job_retention_days: int = 7
     max_upload_size_mb: int = 10240  # 10GB
 

@@ -26,7 +26,7 @@ async def init_dependencies() -> None:
 
     # Initialize database
     _db = JobDatabase(data_dir / "jobs.db")
-    await _db.init()
+    await _db.initialize()
 
     # Initialize processor
     _processor = JobProcessor(_db, data_dir)
