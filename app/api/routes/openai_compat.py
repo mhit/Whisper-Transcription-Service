@@ -114,7 +114,7 @@ def segments_to_vtt(segments: list[dict]) -> str:
     return "\n".join(lines)
 
 
-@router.post("/transcriptions")
+@router.post("/transcriptions", response_model=None)
 async def create_transcription(
     file: UploadFile = File(..., description="The audio file to transcribe"),
     model: str = Form("whisper-1", description="Model to use (ignored, uses configured model)"),
@@ -123,7 +123,7 @@ async def create_transcription(
     response_format: ResponseFormat = Form(ResponseFormat.JSON, description="Output format"),
     temperature: float = Form(0.0, ge=0.0, le=1.0, description="Sampling temperature"),
     whisper_manager: WhisperManager = Depends(get_whisper_manager),
-) -> Union[JSONResponse, PlainTextResponse]:
+):
     """
     Transcribes audio into the input language.
 
@@ -242,7 +242,7 @@ async def create_transcription(
             wav_path.unlink()
 
 
-@router.post("/translations")
+@router.post("/translations", response_model=None)
 async def create_translation(
     file: UploadFile = File(..., description="The audio file to translate"),
     model: str = Form("whisper-1", description="Model to use (ignored)"),
@@ -250,7 +250,7 @@ async def create_translation(
     response_format: ResponseFormat = Form(ResponseFormat.JSON, description="Output format"),
     temperature: float = Form(0.0, ge=0.0, le=1.0, description="Sampling temperature"),
     whisper_manager: WhisperManager = Depends(get_whisper_manager),
-) -> Union[JSONResponse, PlainTextResponse]:
+):
     """
     Translates audio into English.
 
