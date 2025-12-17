@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.dependencies import init_dependencies, shutdown_dependencies
-from app.api.routes import admin, health, jobs, web
+from app.api.routes import admin, health, jobs, openai_compat, web
 from app.config import get_settings
 
 # Configure logging
@@ -78,6 +78,9 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
     app.include_router(admin.router, prefix="/api/admin")
+
+    # OpenAI-compatible API routes (no prefix - uses /v1/audio internally)
+    app.include_router(openai_compat.router)
 
     # Web UI routes
     app.include_router(web.router)

@@ -129,6 +129,9 @@ class WhisperManager:
     async def transcribe(
         self,
         audio_path: str | Path,
+        language: Optional[str] = None,
+        initial_prompt: Optional[str] = None,
+        task: str = "transcribe",
         progress_callback: Optional[Callable[[int], None]] = None,
     ) -> dict:
         """
@@ -136,10 +139,13 @@ class WhisperManager:
 
         Args:
             audio_path: Path to audio file (WAV format recommended)
+            language: Language code (e.g., "ja", "en"). None for auto-detect.
+            initial_prompt: Optional prompt to guide transcription
+            task: "transcribe" or "translate" (translate to English)
             progress_callback: Optional callback for progress updates (0-100)
 
         Returns:
-            Transcription result dict with 'text' and 'segments'
+            Transcription result dict with 'text', 'segments', 'language', 'duration'
         """
         # Cancel any pending unload
         self._cancel_unload_timer()
@@ -154,12 +160,21 @@ class WhisperManager:
         if progress_callback:
             progress_callback(0)
 
+        # Build settings with overrides
+        settings = WHISPER_SETTINGS.copy()
+        if language:
+            settings["language"] = language
+        if initial_prompt:
+            settings["initial_prompt"] = initial_prompt
+        settings["task"] = task
+
         # Run transcription in executor
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None,
             self._transcribe_sync,
             str(audio_path),
+            settings,
         )
 
         # Report completion
@@ -169,9 +184,14 @@ class WhisperManager:
         self._last_used = datetime.utcnow()
         return result
 
-    def _transcribe_sync(self, audio_path: str) -> dict:
+    def _transcribe_sync(self, audio_path: str, settings: dict) -> dict:
         """Synchronous transcription (runs in executor)."""
-        return self.model.transcribe(audio_path, **WHISPER_SETTINGS)
+        result = self.model.transcribe(audio_path, **settings)
+        # Ensure we return duration for OpenAI-compatible API
+        if "duration" not in result and "segments" in result and result["segments"]:
+            last_segment = result["segments"][-1]
+            result["duration"] = last_segment.get("end", 0.0)
+        return result
 
     def start_unload_timer(self) -> None:
         """Start timer to unload model after idle period."""

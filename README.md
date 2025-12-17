@@ -5,8 +5,9 @@ GPU対応の高品質な日本語文字起こしサービス。Docker で簡単�
 ## 特徴
 
 - **高品質な日本語文字起こし**: OpenAI Whisper large-v3 を使用した最適化設定
+- **OpenAI SDK 互換 API**: 既存の OpenAI クライアントからそのまま利用可能
 - **複数の入力方法**: URL (YouTube, Vimeo 等) またはファイルアップロード
-- **4種類の出力形式**: JSON, テキスト, SRT字幕, Markdown
+- **5種類の出力形式**: JSON, テキスト, SRT字幕, VTT字幕, Markdown
 - **GPU メモリ最適化**: アイドル時に自動でモデルをアンロード
 - **N8N 連携対応**: Webhook 通知によるワークフロー統合
 - **シンプルなジョブ管理**: `JOB-XXXXXX` 形式の短いジョブID
@@ -23,8 +24,8 @@ GPU対応の高品質な日本語文字起こしサービス。Docker で簡単�
 
 ```bash
 # リポジトリをクローン
-git clone <repository-url>
-cd VideoTranscriptAnalyzer
+git clone https://github.com/mhit/Whisper-Transcription-Service.git
+cd Whisper-Transcription-Service
 
 # 環境変数を設定
 cp .env.example .env
@@ -145,6 +146,75 @@ curl -X DELETE http://localhost:8000/api/jobs/JOB-ABC123
 | POST | `/api/admin/cleanup` | 期限切れジョブ削除 |
 | POST | `/api/admin/model/unload` | モデルをアンロード |
 | POST | `/api/admin/model/load` | モデルをロード |
+
+### OpenAI 互換 API
+
+既存の OpenAI SDK やツールからそのまま利用できる互換 API です。
+
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| POST | `/v1/audio/transcriptions` | 音声文字起こし |
+| POST | `/v1/audio/translations` | 英語への翻訳 |
+| GET | `/v1/audio/models` | 利用可能モデル一覧 |
+
+#### OpenAI Python SDK での使用例
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key="not-needed"  # または設定した API キー
+)
+
+# 音声ファイルを文字起こし
+with open("audio.mp3", "rb") as f:
+    transcription = client.audio.transcriptions.create(
+        model="whisper-1",
+        file=f,
+        language="ja",
+        response_format="verbose_json"
+    )
+
+print(transcription.text)
+```
+
+#### curl での使用例
+
+```bash
+# 音声ファイルを文字起こし (JSON形式)
+curl -X POST http://localhost:8000/v1/audio/transcriptions \
+  -F "file=@audio.mp3" \
+  -F "model=whisper-1" \
+  -F "language=ja"
+
+# verbose_json 形式で詳細取得
+curl -X POST http://localhost:8000/v1/audio/transcriptions \
+  -F "file=@audio.mp3" \
+  -F "model=whisper-1" \
+  -F "response_format=verbose_json"
+
+# SRT字幕形式で出力
+curl -X POST http://localhost:8000/v1/audio/transcriptions \
+  -F "file=@audio.mp3" \
+  -F "response_format=srt" \
+  -o output.srt
+
+# 英語に翻訳
+curl -X POST http://localhost:8000/v1/audio/translations \
+  -F "file=@japanese_audio.mp3" \
+  -F "model=whisper-1"
+```
+
+#### サポートする出力形式
+
+| Format | 説明 |
+|--------|------|
+| `json` | シンプルな JSON (`{"text": "..."}`) |
+| `text` | プレーンテキスト |
+| `srt` | SRT 字幕形式 |
+| `vtt` | WebVTT 字幕形式 |
+| `verbose_json` | 詳細 JSON (セグメント、タイムスタンプ含む) |
 
 ### ジョブステータス
 
@@ -293,9 +363,10 @@ services:
 │                     Web UI / API                        │
 ├─────────────────────────────────────────────────────────┤
 │                     FastAPI                             │
-├──────────────┬──────────────┬──────────────────────────┤
-│   Jobs API   │  Admin API   │      Health API          │
-├──────────────┴──────────────┴──────────────────────────┤
+├──────────────┬──────────────┬─────────────┬────────────┤
+│   Jobs API   │  Admin API   │ Health API  │ OpenAI API │
+│  /api/jobs   │ /api/admin   │ /api/health │ /v1/audio  │
+├──────────────┴──────────────┴─────────────┴────────────┤
 │                   Job Processor                         │
 │  ┌─────────┬─────────┬─────────────┬──────────────┐   │
 │  │Download │ Extract │ Transcribe  │   Format     │   │
@@ -348,7 +419,7 @@ pytest tests/unit/test_whisper_manager.py -v
 ### プロジェクト構造
 
 ```
-VideoTranscriptAnalyzer/
+Whisper-Transcription-Service/
 ├── app/
 │   ├── api/
 │   │   ├── dependencies.py    # DI コンテナ
@@ -356,6 +427,7 @@ VideoTranscriptAnalyzer/
 │   │       ├── admin.py       # 管理者API
 │   │       ├── health.py      # ヘルスチェック
 │   │       ├── jobs.py        # ジョブAPI
+│   │       ├── openai_compat.py # OpenAI 互換 API
 │   │       └── web.py         # Web UI
 │   ├── core/
 │   │   ├── audio_extractor.py # FFmpeg 音声抽出

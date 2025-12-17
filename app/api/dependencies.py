@@ -6,8 +6,11 @@ from typing import Optional
 
 from app.config import get_settings
 from app.core.job_processor import JobProcessor
-from app.core.whisper_manager import get_whisper_manager
+from app.core.whisper_manager import WhisperManager, get_whisper_manager
 from app.db.database import JobDatabase
+
+# Re-export for API routes
+__all__ = ["get_db", "get_processor", "get_whisper_manager", "WhisperManager"]
 
 # Global instances
 _db: Optional[JobDatabase] = None
