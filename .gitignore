@@ -6,6 +6,8 @@ __pycache__/
 .Python
 venv/
 .venv/
+ENV/
+env/
 
 # Test and temporary files
 test_output*/
@@ -14,6 +16,9 @@ cache/
 *.log
 .pytest_cache/
 .coverage
+htmlcov/
+.tox/
+.nox/
 
 # IDE
 .vscode/
@@ -33,11 +38,22 @@ desktop.ini
 *.mp4
 *.mp3
 *.m4a
+*.avi
+*.mkv
+*.webm
 downloads/
 
-# Temporary test scripts
-test_*.py
-!test_resume_functionality.py
+# Data directories
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Model files (large)
+*.pt
+*.pth
+*.bin
+*.onnx
 
 # Build
 build/
@@ -47,7 +63,14 @@ dist/
 # Environment
 .env
 .env.local
+.env.*.local
 
 # Documentation build
 docs/_build/
 *.doctree
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Legacy folder
+legacy/

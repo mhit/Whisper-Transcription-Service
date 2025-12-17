@@ -1,0 +1,74 @@
+# Whisper Transcription Service - Docker Compose
+# Run with: docker-compose up -d
+
+version: '3.8'
+
+services:
+  whisper-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: whisper-transcription
+    restart: unless-stopped
+
+    # GPU access
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      # Persistent data storage
+      - whisper-data:/app/data
+      # Optional: Mount custom config
+      # - ./config.yaml:/app/config.yaml:ro
+
+    environment:
+      # Whisper settings
+      - WHISPER_MODEL=${WHISPER_MODEL:-large-v3}
+      - MODEL_UNLOAD_MINUTES=${MODEL_UNLOAD_MINUTES:-5}
+
+      # Data retention
+      - JOB_RETENTION_DAYS=${JOB_RETENTION_DAYS:-7}
+
+      # Admin password (REQUIRED - set in .env file)
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+
+      # Optional API key
+      - API_KEY=${API_KEY:-}
+
+      # Cloudflare Tunnel (optional)
+      - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+
+      # Debug mode
+      - DEBUG=${DEBUG:-false}
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  whisper-data:
+    driver: local
+
+# Network (optional - useful for integration with other services)
+networks:
+  default:
+    name: whisper-network

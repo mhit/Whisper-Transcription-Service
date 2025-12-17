@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Whisper Transcription Service - ホーム{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>新規ジョブ作成</h2>
+
+    <form id="job-form" action="/api/jobs" method="post" enctype="multipart/form-data">
+        <!-- URL Input -->
+        <div class="form-group">
+            <label for="url-input">動画URL</label>
+            <input
+                type="url"
+                id="url-input"
+                name="url"
+                placeholder="https://www.youtube.com/watch?v=..."
+            >
+            <p class="form-hint">YouTube, Vimeo, その他多数のサイトに対応</p>
+        </div>
+
+        <div class="divider">
+            <span>または</span>
+        </div>
+
+        <!-- File Upload -->
+        <div class="form-group">
+            <label>ファイルアップロード</label>
+            <div class="file-upload" id="file-upload">
+                <input type="file" id="file-input" name="file" accept="video/*,audio/*">
+                <div class="file-upload-icon">📁</div>
+                <p class="file-upload-text">クリックまたはドラッグ&ドロップ</p>
+                <p class="form-hint">MP4, MP3, WAV, その他の動画・音声形式に対応</p>
+                <p class="file-upload-name" id="file-name" style="display: none;"></p>
+            </div>
+        </div>
+
+        <!-- Optional Webhook -->
+        <div class="form-group">
+            <label for="webhook-input">Webhook URL (オプション)</label>
+            <input
+                type="url"
+                id="webhook-input"
+                name="webhook_url"
+                placeholder="https://example.com/webhook"
+            >
+            <p class="form-hint">完了時に通知を受け取るURL (N8N連携など)</p>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+            文字起こしを開始
+        </button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>ジョブを確認</h2>
+    <form action="/job" method="get" onsubmit="window.location.href='/job/' + document.getElementById('job-id-input').value; return false;">
+        <div class="form-group">
+            <label for="job-id-input">ジョブID</label>
+            <input
+                type="text"
+                id="job-id-input"
+                placeholder="JOB-XXXXXX"
+                pattern="JOB-[A-Z0-9]{6}"
+            >
+        </div>
+        <button type="submit" class="btn btn-secondary btn-block">
+            ジョブを確認
+        </button>
+    </form>
+</div>
+{% endblock %}

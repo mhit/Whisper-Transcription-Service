@@ -1,82 +1,435 @@
-# VideoTranscriptAnalyzer
+# Whisper Transcription Service
 
-動画ファイルから自動で文字起こしを行い、AI分析レポートを生成するツール
+GPU対応の高品質な日本語文字起こしサービス。Docker で簡単にデプロイでき、Web UI と REST API の両方からアクセス可能です。
 
-## 🚀 クイックスタート
+## 特徴
 
-### 1. セットアップ（初回のみ）
-```powershell
-.\setup.ps1
+- **高品質な日本語文字起こし**: OpenAI Whisper large-v3 を使用した最適化設定
+- **複数の入力方法**: URL (YouTube, Vimeo 等) またはファイルアップロード
+- **4種類の出力形式**: JSON, テキスト, SRT字幕, Markdown
+- **GPU メモリ最適化**: アイドル時に自動でモデルをアンロード
+- **N8N 連携対応**: Webhook 通知によるワークフロー統合
+- **シンプルなジョブ管理**: `JOB-XXXXXX` 形式の短いジョブID
+
+## クイックスタート
+
+### 前提条件
+
+- Docker & Docker Compose
+- NVIDIA GPU (CUDA 12.1+)
+- NVIDIA Container Toolkit
+
+### 1. 環境設定
+
+```bash
+# リポジトリをクローン
+git clone <repository-url>
+cd VideoTranscriptAnalyzer
+
+# 環境変数を設定
+cp .env.example .env
+
+# .env ファイルを編集し、ADMIN_PASSWORD を設定
+nano .env
 ```
 
-このコマンド1つで以下が自動実行されます：
-- Python仮想環境の作成
-- GPU自動検出と最適化
-- RTX 5070 Ti自動対応
-- 全依存パッケージのインストール
+### 2. 起動
 
-### 2. 使い方
-```powershell
-python video_transcript_analyzer.py --input "動画ファイル.mp4"
+```bash
+# ビルドして起動
+docker-compose up -d
+
+# ログを確認
+docker-compose logs -f
 ```
 
-## 📋 主な機能
+### 3. アクセス
 
-- **動画ダウンロード**: YouTube等からの自動ダウンロード
-- **音声抽出**: ffmpegによる高品質音声抽出
-- **文字起こし**: OpenAI Whisper (large-v3) による高精度認識
-- **AI分析**: GPT-4/Claude/Ollamaによる内容分析
-- **レポート生成**: Markdown形式の詳細レポート
+- **Web UI**: http://localhost:8000
+- **API ドキュメント**: http://localhost:8000/docs
+- **ヘルスチェック**: http://localhost:8000/api/health
 
-## 🔧 システム要件
+## 使い方
 
-- Windows 10/11
-- Python 3.10以上
-- ffmpeg（動画処理用）
-- 16GB以上のRAM推奨
+### Web UI
 
-## 🎮 GPU対応状況
+1. ブラウザで http://localhost:8000 を開く
+2. URL を入力するか、ファイルをアップロード
+3. 「文字起こしを開始」をクリック
+4. ジョブIDが発行され、ステータスページに遷移
+5. 完了後、各形式でダウンロード可能
 
-| GPU | 対応状況 | 備考 |
-|-----|---------|------|
-| RTX 5070 Ti/5080/5090 | ✅ | 自動でCPUモードに切り替え |
-| RTX 4090/4080/4070 | ✅ | GPU高速処理 |
-| RTX 3090/3080/3070 | ✅ | GPU高速処理 |
-| その他NVIDIA GPU | ✅ | CUDA対応GPU |
-| CPU only | ✅ | 自動検出してCPU版インストール |
+### REST API
 
-## 📁 出力ファイル
+#### ジョブ作成 (URL)
 
-処理完了後、以下のファイルが生成されます：
-
-```
-output/
-├── audio/          # 抽出音声
-├── segments/       # タイムスタンプ付き文字起こし
-├── screenshots/    # スクリーンショット
-└── reports/        # 分析レポート（Markdown）
+```bash
+curl -X POST http://localhost:8000/api/jobs \
+  -F "url=https://www.youtube.com/watch?v=..."
 ```
 
-## ⚙️ 設定
+#### ジョブ作成 (ファイルアップロード)
 
-`config.yaml` で各種設定を変更できます：
+```bash
+curl -X POST http://localhost:8000/api/jobs \
+  -F "file=@video.mp4"
+```
 
-- Whisperモデルサイズ
-- AI分析モデル（GPT-4/Claude/Ollama）
-- 出力形式
-- 言語設定
+#### ジョブ作成 (Webhook 付き)
 
-## 🆘 トラブルシューティング
+```bash
+curl -X POST http://localhost:8000/api/jobs \
+  -F "url=https://www.youtube.com/watch?v=..." \
+  -F "webhook_url=https://n8n.example.com/webhook/xxx"
+```
 
-**Q: ffmpegが見つからない**
-A: https://ffmpeg.org/download.html からダウンロードしてPATHに追加
+#### ステータス確認
 
-**Q: メモリ不足エラー**
-A: config.yamlでWhisperモデルを'base'や'small'に変更
+```bash
+curl http://localhost:8000/api/jobs/JOB-ABC123
+```
 
-**Q: CUDA関連エラー**
-A: setup.ps1を再実行（自動で最適な設定を適用）
+レスポンス例:
+```json
+{
+  "job_id": "JOB-ABC123",
+  "status": "transcribing",
+  "stage": "transcribing",
+  "progress": 45,
+  "created_at": "2025-01-15T10:30:00Z"
+}
+```
 
-## 📄 ライセンス
+#### 結果ダウンロード
+
+```bash
+# JSON形式
+curl -O http://localhost:8000/api/jobs/JOB-ABC123/download?format=json
+
+# テキスト形式
+curl -O http://localhost:8000/api/jobs/JOB-ABC123/download?format=txt
+
+# SRT字幕形式
+curl -O http://localhost:8000/api/jobs/JOB-ABC123/download?format=srt
+
+# Markdown形式
+curl -O http://localhost:8000/api/jobs/JOB-ABC123/download?format=md
+```
+
+#### ジョブ削除
+
+```bash
+curl -X DELETE http://localhost:8000/api/jobs/JOB-ABC123
+```
+
+## API リファレンス
+
+### エンドポイント一覧
+
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| POST | `/api/jobs` | ジョブ作成 |
+| GET | `/api/jobs` | ジョブ一覧 |
+| GET | `/api/jobs/{job_id}` | ステータス取得 |
+| GET | `/api/jobs/{job_id}/download` | 結果ダウンロード |
+| DELETE | `/api/jobs/{job_id}` | ジョブ削除 |
+| GET | `/api/health` | ヘルスチェック |
+
+### 管理者エンドポイント
+
+`X-Admin-Password` ヘッダーに管理者パスワードが必要です。
+
+| Method | Endpoint | 説明 |
+|--------|----------|------|
+| GET | `/api/admin/stats` | システム統計 |
+| POST | `/api/admin/cleanup` | 期限切れジョブ削除 |
+| POST | `/api/admin/model/unload` | モデルをアンロード |
+| POST | `/api/admin/model/load` | モデルをロード |
+
+### ジョブステータス
+
+| Status | 説明 |
+|--------|------|
+| `queued` | キューで待機中 |
+| `downloading` | 動画をダウンロード中 |
+| `extracting` | 音声を抽出中 |
+| `transcribing` | 文字起こし中 |
+| `formatting` | 出力ファイル生成中 |
+| `completed` | 完了 |
+| `failed` | エラー |
+
+### Webhook ペイロード
+
+ジョブ完了時または失敗時に、指定された Webhook URL に POST リクエストが送信されます。
+
+**完了時:**
+```json
+{
+  "event": "job.completed",
+  "job_id": "JOB-ABC123",
+  "status": "completed",
+  "download_urls": {
+    "json": "/api/jobs/JOB-ABC123/download?format=json",
+    "txt": "/api/jobs/JOB-ABC123/download?format=txt",
+    "srt": "/api/jobs/JOB-ABC123/download?format=srt",
+    "md": "/api/jobs/JOB-ABC123/download?format=md"
+  }
+}
+```
+
+**失敗時:**
+```json
+{
+  "event": "job.failed",
+  "job_id": "JOB-ABC123",
+  "status": "failed",
+  "error": {
+    "type": "transcription_error",
+    "message": "Error details..."
+  }
+}
+```
+
+## N8N 連携
+
+### N8N カスタムノード
+
+専用の N8N カスタムノードを使用して、ワークフローから直接文字起こしサービスを利用できます。
+
+#### インストール
+
+```bash
+# ノードをビルド
+cd n8n-node
+npm install
+npm run build
+
+# N8N にインストール (方法1: カスタムディレクトリ)
+cd ~/.n8n/custom
+npm install /path/to/VideoTranscriptAnalyzer/n8n-node
+
+# N8N を再起動
+docker-compose restart n8n
+```
+
+#### Docker 環境でのインストール
+
+```yaml
+# docker-compose.yml に追加
+services:
+  n8n:
+    volumes:
+      - ./n8n-node:/home/node/.n8n/custom/n8n-nodes-whisper-transcription
+```
+
+#### Credentials 設定
+
+1. N8N の **Credentials** を開く
+2. **Add Credential** → **Whisper Transcription API** を選択
+3. 設定:
+   - **Base URL**: `http://whisper-service:8000` (Docker 内部) または `http://localhost:8000`
+   - **API Key**: (オプション) API キーを設定している場合のみ
+
+#### サポートするオペレーション
+
+| Operation | 説明 |
+|-----------|------|
+| **Create Job from URL** | YouTube 等の動画 URL から文字起こしジョブを作成 |
+| **Create Job from File** | アップロードしたファイルから文字起こしジョブを作成 |
+| **Get Job Status** | ジョブの現在のステータスを取得 |
+| **Wait for Completion** | ジョブ完了までポーリングして待機 |
+| **Download Result** | 完了したジョブの結果をダウンロード (JSON/TXT/SRT/MD) |
+| **Delete Job** | ジョブを削除 |
+
+#### ワークフロー例
+
+**例1: URL から文字起こし → メール送信**
+```
+[Webhook] → [Whisper: Create from URL] → [Whisper: Wait for Completion] → [Whisper: Download] → [Email]
+```
+
+**例2: ファイルアップロード → Slack 通知**
+```
+[Webhook (File)] → [Whisper: Create from File] → [Whisper: Wait] → [Slack]
+```
+
+**例3: 非同期処理 (Webhook コールバック使用)**
+```
+[Trigger] → [Whisper: Create from URL + Webhook] ... [Webhook] → [Process Result]
+```
+
+詳細は `n8n-node/README.md` を参照してください。
+
+---
+
+## 設定
+
+### 環境変数
+
+| 変数名 | デフォルト | 説明 |
+|--------|----------|------|
+| `ADMIN_PASSWORD` | (必須) | 管理者パスワード |
+| `WHISPER_MODEL` | `large-v3` | Whisper モデル |
+| `MODEL_UNLOAD_MINUTES` | `5` | アイドル後にモデルをアンロードする分数 |
+| `JOB_RETENTION_DAYS` | `7` | ジョブデータの保持日数 |
+| `API_KEY` | (空) | API 認証キー (オプション) |
+| `CLOUDFLARE_TUNNEL_TOKEN` | (空) | Cloudflare Tunnel トークン |
+| `DEBUG` | `false` | デバッグモード |
+
+### Whisper モデル
+
+| モデル | VRAM | 精度 | 速度 |
+|--------|------|------|------|
+| `tiny` | ~1GB | 低 | 最速 |
+| `base` | ~1GB | 低 | 速い |
+| `small` | ~2GB | 中 | 普通 |
+| `medium` | ~5GB | 高 | 遅い |
+| `large-v3` | ~10GB | 最高 | 最遅 |
+
+## アーキテクチャ
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     Web UI / API                        │
+├─────────────────────────────────────────────────────────┤
+│                     FastAPI                             │
+├──────────────┬──────────────┬──────────────────────────┤
+│   Jobs API   │  Admin API   │      Health API          │
+├──────────────┴──────────────┴──────────────────────────┤
+│                   Job Processor                         │
+│  ┌─────────┬─────────┬─────────────┬──────────────┐   │
+│  │Download │ Extract │ Transcribe  │   Format     │   │
+│  │(yt-dlp) │(FFmpeg) │  (Whisper)  │(JSON/SRT/MD) │   │
+│  └─────────┴─────────┴─────────────┴──────────────┘   │
+├─────────────────────────────────────────────────────────┤
+│                   SQLite Database                       │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 処理フロー
+
+1. **ジョブ作成**: URL または ファイルを受け取り、ジョブIDを発行
+2. **ダウンロード**: yt-dlp で動画をダウンロード (URLの場合)
+3. **音声抽出**: FFmpeg で 16kHz モノラル WAV に変換
+4. **文字起こし**: Whisper で日本語最適化設定を使用して文字起こし
+5. **フォーマット**: JSON, テキスト, SRT, Markdown 形式で出力
+6. **通知**: Webhook URL が設定されている場合、完了/失敗を通知
+7. **クリーンアップ**: 中間ファイル (WAV) を自動削除
+
+## 開発
+
+### ローカル開発環境
+
+```bash
+# 仮想環境を作成
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 依存関係をインストール
+pip install -r requirements.txt
+
+# 開発サーバーを起動
+python -m app.main
+```
+
+### テスト実行
+
+```bash
+# 全テストを実行
+pytest
+
+# カバレッジ付き
+pytest --cov=app --cov-report=html
+
+# 特定のテストを実行
+pytest tests/unit/test_whisper_manager.py -v
+```
+
+### プロジェクト構造
+
+```
+VideoTranscriptAnalyzer/
+├── app/
+│   ├── api/
+│   │   ├── dependencies.py    # DI コンテナ
+│   │   └── routes/
+│   │       ├── admin.py       # 管理者API
+│   │       ├── health.py      # ヘルスチェック
+│   │       ├── jobs.py        # ジョブAPI
+│   │       └── web.py         # Web UI
+│   ├── core/
+│   │   ├── audio_extractor.py # FFmpeg 音声抽出
+│   │   ├── downloader.py      # yt-dlp ダウンロード
+│   │   ├── formatter.py       # 出力フォーマット
+│   │   ├── job_processor.py   # パイプライン処理
+│   │   └── whisper_manager.py # Whisper 管理
+│   ├── db/
+│   │   └── database.py        # SQLite データベース
+│   ├── models/
+│   │   └── job.py             # Pydantic モデル
+│   ├── static/                # CSS/JS
+│   ├── templates/             # Jinja2 テンプレート
+│   ├── config.py              # 設定管理
+│   └── main.py                # アプリケーション
+├── n8n-node/                   # N8N カスタムノード
+│   ├── nodes/
+│   │   └── WhisperTranscription/
+│   │       ├── WhisperTranscription.node.ts
+│   │       └── whisper.svg
+│   ├── credentials/
+│   │   └── WhisperTranscriptionApi.credentials.ts
+│   ├── package.json
+│   └── README.md
+├── tests/
+│   └── unit/                  # ユニットテスト
+├── scripts/
+│   └── entrypoint.sh          # Docker エントリーポイント
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── README.md
+```
+
+## トラブルシューティング
+
+### GPU が認識されない
+
+```bash
+# NVIDIA ドライバーを確認
+nvidia-smi
+
+# NVIDIA Container Toolkit を確認
+docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
+```
+
+### メモリ不足エラー
+
+`WHISPER_MODEL` を小さいモデルに変更:
+
+```bash
+WHISPER_MODEL=medium docker-compose up -d
+```
+
+### ダウンロードが失敗する
+
+yt-dlp を最新バージョンに更新:
+
+```bash
+docker-compose build --no-cache
+```
+
+### 文字起こしの品質が低い
+
+- 音声品質が低い場合、前処理でノイズ除去を検討
+- `large-v3` モデルを使用していることを確認
+- 音声が日本語であることを確認
+
+## ライセンス
 
 MIT License
+
+## 謝辞
+
+- [OpenAI Whisper](https://github.com/openai/whisper) - 高精度な音声認識モデル
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) - 動画ダウンロードツール
+- [FastAPI](https://fastapi.tiangolo.com/) - 高速な Web フレームワーク
