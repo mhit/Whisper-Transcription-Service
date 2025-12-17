@@ -1,0 +1,461 @@
+{% extends "base.html" %}
+
+{% block title %}管理者ダッシュボード - Whisper Transcription Service{% endblock %}
+
+{% block head %}
+<style>
+    .admin-login {
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    .admin-dashboard {
+        display: none;
+    }
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    .stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-align: center;
+    }
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: var(--primary-color);
+    }
+    .stat-label {
+        color: var(--text-secondary);
+        margin-top: 0.5rem;
+    }
+    .model-status {
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        display: inline-block;
+        font-weight: bold;
+    }
+    .model-loaded {
+        background: #d4edda;
+        color: #155724;
+    }
+    .model-unloaded {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 2rem;
+    }
+    .action-buttons .btn {
+        flex: 1;
+        min-width: 150px;
+    }
+    .job-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+    }
+    .job-table th,
+    .job-table td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border-color);
+    }
+    .job-table th {
+        background: var(--bg-secondary);
+        font-weight: 600;
+    }
+    .job-table tr:hover {
+        background: var(--bg-secondary);
+    }
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    .status-queued { background: #e2e8f0; color: #475569; }
+    .status-downloading { background: #dbeafe; color: #1e40af; }
+    .status-extracting { background: #fef3c7; color: #92400e; }
+    .status-transcribing { background: #fce7f3; color: #9d174d; }
+    .status-formatting { background: #ede9fe; color: #6b21a8; }
+    .status-completed { background: #d1fae5; color: #065f46; }
+    .status-failed { background: #fee2e2; color: #991b1b; }
+    .gpu-info {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-top: 1rem;
+    }
+    .gpu-info h4 {
+        margin: 0 0 0.5rem 0;
+    }
+    .refresh-btn {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .alert {
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    .alert-success {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #a7f3d0;
+    }
+    .alert-error {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fca5a5;
+    }
+    .loading {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Login Form -->
+<div class="card admin-login" id="login-section">
+    <h2>管理者ログイン</h2>
+    <form id="login-form">
+        <div class="form-group">
+            <label for="admin-password">管理者パスワード</label>
+            <input type="password" id="admin-password" placeholder="パスワードを入力" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">ログイン</button>
+    </form>
+    <div id="login-error" class="alert alert-error" style="display: none;"></div>
+</div>
+
+<!-- Admin Dashboard -->
+<div class="admin-dashboard" id="dashboard-section">
+    <div id="alert-container"></div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="total-jobs">-</div>
+            <div class="stat-label">総ジョブ数</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="queue-size">-</div>
+            <div class="stat-label">キュー待ち</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="completed-jobs">-</div>
+            <div class="stat-label">完了</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="failed-jobs">-</div>
+            <div class="stat-label">失敗</div>
+        </div>
+    </div>
+
+    <!-- Model Status Card -->
+    <div class="card">
+        <h2>Whisper モデル状態</h2>
+        <p>
+            モデル: <strong id="model-name">-</strong> |
+            デバイス: <strong id="model-device">-</strong> |
+            状態: <span class="model-status model-unloaded" id="model-status">未ロード</span>
+        </p>
+        <p id="last-used" style="color: var(--text-secondary); font-size: 0.9rem;"></p>
+
+        <div class="action-buttons">
+            <button class="btn btn-primary" id="load-model-btn" onclick="loadModel()">
+                モデルをロード
+            </button>
+            <button class="btn btn-secondary" id="unload-model-btn" onclick="unloadModel()">
+                モデルをアンロード
+            </button>
+        </div>
+
+        <div class="gpu-info" id="gpu-info" style="display: none;">
+            <h4>GPU 情報</h4>
+            <p id="gpu-name">-</p>
+            <p>メモリ使用: <span id="gpu-memory">-</span></p>
+        </div>
+    </div>
+
+    <!-- Actions Card -->
+    <div class="card">
+        <h2>管理アクション</h2>
+        <div class="action-buttons">
+            <button class="btn btn-secondary" onclick="refreshStats()">
+                統計を更新
+            </button>
+            <button class="btn btn-primary" onclick="cleanupJobs()">
+                期限切れジョブを削除
+            </button>
+        </div>
+    </div>
+
+    <!-- Jobs Table -->
+    <div class="card">
+        <h2>最近のジョブ</h2>
+        <table class="job-table">
+            <thead>
+                <tr>
+                    <th>ジョブID</th>
+                    <th>状態</th>
+                    <th>進捗</th>
+                    <th>作成日時</th>
+                    <th>ソース</th>
+                </tr>
+            </thead>
+            <tbody id="jobs-table-body">
+                <tr><td colspan="5" style="text-align: center;">読み込み中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<button class="btn btn-primary refresh-btn" onclick="refreshStats()" title="更新">
+    🔄
+</button>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let adminPassword = '';
+
+// Login handling
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const password = document.getElementById('admin-password').value;
+
+    try {
+        const response = await fetch('/api/admin/stats', {
+            headers: { 'X-Admin-Password': password }
+        });
+
+        if (response.ok) {
+            adminPassword = password;
+            sessionStorage.setItem('adminPassword', password);
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('dashboard-section').style.display = 'block';
+            refreshStats();
+            loadJobs();
+        } else {
+            document.getElementById('login-error').textContent = 'パスワードが正しくありません';
+            document.getElementById('login-error').style.display = 'block';
+        }
+    } catch (error) {
+        document.getElementById('login-error').textContent = 'エラーが発生しました';
+        document.getElementById('login-error').style.display = 'block';
+    }
+});
+
+// Check for saved password
+const savedPassword = sessionStorage.getItem('adminPassword');
+if (savedPassword) {
+    adminPassword = savedPassword;
+    document.getElementById('login-section').style.display = 'none';
+    document.getElementById('dashboard-section').style.display = 'block';
+    refreshStats();
+    loadJobs();
+}
+
+// Show alert
+function showAlert(message, type = 'success') {
+    const container = document.getElementById('alert-container');
+    const alert = document.createElement('div');
+    alert.className = `alert alert-${type}`;
+    alert.textContent = message;
+    container.appendChild(alert);
+    setTimeout(() => alert.remove(), 5000);
+}
+
+// Refresh stats
+async function refreshStats() {
+    try {
+        const response = await fetch('/api/admin/stats', {
+            headers: { 'X-Admin-Password': adminPassword }
+        });
+
+        if (!response.ok) {
+            if (response.status === 401) {
+                sessionStorage.removeItem('adminPassword');
+                location.reload();
+            }
+            return;
+        }
+
+        const data = await response.json();
+
+        // Update stats
+        document.getElementById('total-jobs').textContent = data.total_jobs || 0;
+        document.getElementById('queue-size').textContent = data.queue?.queue_size || 0;
+        document.getElementById('completed-jobs').textContent = data.status_counts?.completed || 0;
+        document.getElementById('failed-jobs').textContent = data.status_counts?.failed || 0;
+
+        // Update model status
+        const whisper = data.whisper;
+        document.getElementById('model-name').textContent = whisper.model_name;
+        document.getElementById('model-device').textContent = whisper.device.toUpperCase();
+
+        const statusEl = document.getElementById('model-status');
+        if (whisper.is_loaded) {
+            statusEl.textContent = 'ロード済み';
+            statusEl.className = 'model-status model-loaded';
+            document.getElementById('load-model-btn').disabled = true;
+            document.getElementById('unload-model-btn').disabled = false;
+        } else {
+            statusEl.textContent = '未ロード';
+            statusEl.className = 'model-status model-unloaded';
+            document.getElementById('load-model-btn').disabled = false;
+            document.getElementById('unload-model-btn').disabled = true;
+        }
+
+        if (whisper.last_used) {
+            document.getElementById('last-used').textContent =
+                `最終使用: ${new Date(whisper.last_used).toLocaleString('ja-JP')}`;
+        }
+
+        // GPU info
+        if (whisper.gpu_info) {
+            document.getElementById('gpu-info').style.display = 'block';
+            document.getElementById('gpu-name').textContent = whisper.gpu_info.name;
+            const memMB = Math.round(whisper.gpu_info.memory_allocated / 1024 / 1024);
+            const reservedMB = Math.round(whisper.gpu_info.memory_reserved / 1024 / 1024);
+            document.getElementById('gpu-memory').textContent =
+                `${memMB} MB 使用 / ${reservedMB} MB 予約`;
+        }
+
+    } catch (error) {
+        console.error('Stats fetch error:', error);
+    }
+}
+
+// Load jobs
+async function loadJobs() {
+    try {
+        const response = await fetch('/api/jobs?limit=20');
+        const data = await response.json();
+
+        const tbody = document.getElementById('jobs-table-body');
+
+        if (!data.jobs || data.jobs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">ジョブがありません</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.jobs.map(job => `
+            <tr>
+                <td><a href="/job/${job.job_id}">${job.job_id}</a></td>
+                <td><span class="status-badge status-${job.status}">${job.status}</span></td>
+                <td>${job.progress}%</td>
+                <td>${new Date(job.created_at).toLocaleString('ja-JP')}</td>
+                <td>${job.filename || job.url || '-'}</td>
+            </tr>
+        `).join('');
+
+    } catch (error) {
+        console.error('Jobs fetch error:', error);
+    }
+}
+
+// Load model
+async function loadModel() {
+    const btn = document.getElementById('load-model-btn');
+    btn.classList.add('loading');
+    btn.textContent = 'ロード中...';
+
+    try {
+        const response = await fetch('/api/admin/model/load', {
+            method: 'POST',
+            headers: { 'X-Admin-Password': adminPassword }
+        });
+
+        if (response.ok) {
+            showAlert('モデルをロードしました');
+            refreshStats();
+        } else {
+            showAlert('モデルのロードに失敗しました', 'error');
+        }
+    } catch (error) {
+        showAlert('エラーが発生しました', 'error');
+    } finally {
+        btn.classList.remove('loading');
+        btn.textContent = 'モデルをロード';
+    }
+}
+
+// Unload model
+async function unloadModel() {
+    const btn = document.getElementById('unload-model-btn');
+    btn.classList.add('loading');
+    btn.textContent = 'アンロード中...';
+
+    try {
+        const response = await fetch('/api/admin/model/unload', {
+            method: 'POST',
+            headers: { 'X-Admin-Password': adminPassword }
+        });
+
+        if (response.ok) {
+            showAlert('モデルをアンロードしました');
+            refreshStats();
+        } else {
+            showAlert('モデルのアンロードに失敗しました', 'error');
+        }
+    } catch (error) {
+        showAlert('エラーが発生しました', 'error');
+    } finally {
+        btn.classList.remove('loading');
+        btn.textContent = 'モデルをアンロード';
+    }
+}
+
+// Cleanup jobs
+async function cleanupJobs() {
+    if (!confirm('期限切れのジョブを削除しますか？')) return;
+
+    try {
+        const response = await fetch('/api/admin/cleanup', {
+            method: 'POST',
+            headers: { 'X-Admin-Password': adminPassword }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            showAlert(`${data.deleted_count}件のジョブを削除しました`);
+            refreshStats();
+            loadJobs();
+        } else {
+            showAlert('クリーンアップに失敗しました', 'error');
+        }
+    } catch (error) {
+        showAlert('エラーが発生しました', 'error');
+    }
+}
+
+// Auto refresh every 30 seconds
+setInterval(() => {
+    if (adminPassword) {
+        refreshStats();
+        loadJobs();
+    }
+}, 30000);
+</script>
+{% endblock %}

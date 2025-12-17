@@ -20,6 +20,12 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+@router.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    """Render the admin dashboard."""
+    return templates.TemplateResponse("admin.html", {"request": request})
+
+
 @router.get("/job/{job_id}", response_class=HTMLResponse)
 async def job_page(request: Request, job_id: str):
     """
