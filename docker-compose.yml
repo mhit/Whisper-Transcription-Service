@@ -26,6 +26,8 @@ services:
     volumes:
       # Persistent data storage
       - whisper-data:/app/data
+      # Whisper model cache (prevents re-downloading ~3GB model)
+      - whisper-models:/home/appuser/.cache/whisper
       # Optional: Mount custom config
       # - ./config.yaml:/app/config.yaml:ro
 
@@ -66,6 +68,8 @@ services:
 
 volumes:
   whisper-data:
+    driver: local
+  whisper-models:
     driver: local
 
 # Network (optional - useful for integration with other services)
