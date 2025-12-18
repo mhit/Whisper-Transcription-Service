@@ -5,6 +5,8 @@ Handles on-demand loading, automatic unloading, and Japanese-optimized transcrip
 import asyncio
 import gc
 import logging
+import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -13,10 +15,42 @@ import torch
 
 logger = logging.getLogger(__name__)
 
+# Transcription speed ratio (audio duration / processing time)
+# GPU with large-v3 typically processes at ~10x realtime
+# Conservative estimate to avoid progress jumping backward
+TRANSCRIPTION_SPEED_RATIO = 8.0
+
+
+def get_audio_duration(audio_path: str) -> Optional[float]:
+    """
+    Get audio duration in seconds using ffprobe.
+
+    Args:
+        audio_path: Path to audio file
+
+    Returns:
+        Duration in seconds, or None if cannot be determined
+    """
+    try:
+        cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            audio_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return float(result.stdout.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
+        logger.warning(f"Could not get audio duration: {e}")
+        return None
+
+
 # Japanese-optimized Whisper settings (from legacy system)
 WHISPER_SETTINGS = {
     "language": "ja",
     "task": "transcribe",
+    "verbose": True,  # Match legacy behavior for consistent processing
     "temperature": 0.0,
     "beam_size": 5,
     "best_of": 5,
@@ -168,14 +202,54 @@ class WhisperManager:
             settings["initial_prompt"] = initial_prompt
         settings["task"] = task
 
-        # Run transcription in executor
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None,
-            self._transcribe_sync,
-            str(audio_path),
-            settings,
-        )
+        # Get audio duration for progress estimation
+        audio_path_str = str(audio_path)
+        audio_duration = get_audio_duration(audio_path_str)
+
+        # Create progress update task if we have duration and callback
+        progress_task = None
+        transcription_complete = asyncio.Event()
+
+        if progress_callback and audio_duration:
+            estimated_time = audio_duration / TRANSCRIPTION_SPEED_RATIO
+            logger.info(
+                f"Audio duration: {audio_duration:.1f}s, "
+                f"estimated transcription time: {estimated_time:.1f}s"
+            )
+
+            async def update_progress():
+                """Update progress based on elapsed time."""
+                start_time = time.time()
+                while not transcription_complete.is_set():
+                    elapsed = time.time() - start_time
+                    # Calculate progress (0-95%, leave 5% for finalization)
+                    progress = min(int((elapsed / estimated_time) * 95), 95)
+                    try:
+                        progress_callback(progress)
+                    except Exception as e:
+                        logger.warning(f"Progress callback error: {e}")
+                    await asyncio.sleep(1.0)  # Update every second
+
+            progress_task = asyncio.create_task(update_progress())
+
+        try:
+            # Run transcription in executor
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                self._transcribe_sync,
+                audio_path_str,
+                settings,
+            )
+        finally:
+            # Signal completion and cancel progress task
+            transcription_complete.set()
+            if progress_task:
+                progress_task.cancel()
+                try:
+                    await progress_task
+                except asyncio.CancelledError:
+                    pass
 
         # Report completion
         if progress_callback:

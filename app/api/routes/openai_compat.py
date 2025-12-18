@@ -4,11 +4,11 @@ OpenAI-compatible audio transcription API.
 Provides /v1/audio/transcriptions endpoint compatible with OpenAI's API,
 allowing use of existing OpenAI SDKs and tools.
 """
-import json
-import tempfile
 import asyncio
+import subprocess
+import tempfile
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Optional
 from enum import Enum
 
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException, Depends
@@ -17,7 +17,44 @@ from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_whisper_manager
 from app.core.whisper_manager import WhisperManager
-from app.core.audio_extractor import AudioExtractor
+
+
+async def convert_to_wav(input_path: Path, output_path: Path) -> bool:
+    """
+    Convert audio/video file to WAV format optimized for Whisper.
+
+    Args:
+        input_path: Source file path
+        output_path: Destination WAV file path
+
+    Returns:
+        True if conversion succeeded, False otherwise
+    """
+    cmd = [
+        "ffmpeg",
+        "-i", str(input_path),
+        "-vn",  # No video
+        "-acodec", "pcm_s16le",  # 16-bit PCM
+        "-ar", "16000",  # 16kHz (Whisper optimal)
+        "-ac", "1",  # Mono
+        "-y",  # Overwrite output
+        str(output_path),
+    ]
+
+    loop = asyncio.get_event_loop()
+
+    def run_ffmpeg():
+        try:
+            subprocess.run(
+                cmd,
+                capture_output=True,
+                check=True,
+            )
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+    return await loop.run_in_executor(None, run_ffmpeg)
 
 
 router = APIRouter(prefix="/v1/audio", tags=["OpenAI Compatible"])
@@ -171,12 +208,16 @@ async def create_transcription(
         tmp_path = Path(tmp.name)
 
     try:
-        # Extract audio if needed (convert to WAV)
+        # Extract audio if needed (convert to WAV for Whisper)
         audio_path = tmp_path
-        if file_ext not in {".wav"}:
-            extractor = AudioExtractor()
-            wav_path = tmp_path.with_suffix(".wav")
-            await extractor.extract(tmp_path, wav_path)
+        wav_path = tmp_path.with_suffix(".wav")
+        if file_ext != ".wav":
+            success = await convert_to_wav(tmp_path, wav_path)
+            if not success:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to convert audio file. Ensure FFmpeg is installed."
+                )
             audio_path = wav_path
 
         # Transcribe
@@ -277,10 +318,14 @@ async def create_translation(
 
     try:
         audio_path = tmp_path
-        if file_ext not in {".wav"}:
-            extractor = AudioExtractor()
-            wav_path = tmp_path.with_suffix(".wav")
-            await extractor.extract(tmp_path, wav_path)
+        wav_path = tmp_path.with_suffix(".wav")
+        if file_ext != ".wav":
+            success = await convert_to_wav(tmp_path, wav_path)
+            if not success:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to convert audio file. Ensure FFmpeg is installed."
+                )
             audio_path = wav_path
 
         # Transcribe with translation task
