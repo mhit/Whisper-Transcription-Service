@@ -22,6 +22,16 @@ from .whisper_manager import get_whisper_manager
 
 logger = logging.getLogger(__name__)
 
+# Global progress ranges for each stage (start%, end%)
+# This ensures progress never goes backward
+STAGE_PROGRESS = {
+    JobStage.DOWNLOADING: (0, 20),
+    JobStage.EXTRACTING: (20, 30),
+    JobStage.TRANSCRIBING: (30, 95),
+    JobStage.FORMATTING: (95, 99),
+    JobStage.COMPLETED: (100, 100),
+}
+
 
 class JobProcessor:
     """
@@ -246,16 +256,27 @@ class JobProcessor:
         return formatter.format_all(transcription, job.job_id, metadata)
 
     async def _update_stage(self, job: Job, stage: JobStage) -> None:
-        """Update job stage and reset progress."""
+        """Update job stage and set progress to stage start."""
         job.stage = stage
         job.status = JobStatus(stage.value)
-        job.progress = 0
+        # Set progress to stage start value
+        start, _ = STAGE_PROGRESS.get(stage, (0, 100))
+        job.progress = start
         await self.db.update_job(job)
-        logger.info(f"Job {job.job_id} stage: {stage.value}")
+        logger.info(f"Job {job.job_id} stage: {stage.value}, progress: {start}%")
 
-    async def _update_progress(self, job: Job, progress: int) -> None:
-        """Update job progress."""
-        job.progress = progress
+    async def _update_progress(self, job: Job, stage_progress: int) -> None:
+        """
+        Update job progress based on stage-local progress.
+
+        Args:
+            job: Job to update
+            stage_progress: Progress within current stage (0-100)
+        """
+        # Convert stage-local progress to global progress
+        start, end = STAGE_PROGRESS.get(job.stage, (0, 100))
+        global_progress = start + int((end - start) * stage_progress / 100)
+        job.progress = min(global_progress, end)
         await self.db.update_job(job)
 
     async def _complete_job(self, job: Job) -> None:
