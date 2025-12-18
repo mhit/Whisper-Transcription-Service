@@ -40,9 +40,11 @@ RUN pip3 install --no-cache-dir --upgrade pip \
 # Copy application code
 COPY --chown=appuser:appuser . .
 
-# Create data directories
+# Create data directories and whisper cache
 RUN mkdir -p /app/data/jobs /app/data/logs \
-    && chown -R appuser:appuser /app/data
+    && mkdir -p /home/appuser/.cache/whisper \
+    && chown -R appuser:appuser /app/data \
+    && chown -R appuser:appuser /home/appuser/.cache
 
 # Switch to non-root user
 USER appuser
